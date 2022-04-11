@@ -12,14 +12,28 @@ async function main() {
   // If this script is run directly using `node` you may want to call compile
   // manually to make sure everything is compiled
   // await hre.run('compile');
-
   // We get the contract to deploy
-  const Greeter = await hre.ethers.getContractFactory("Greeter");
-  const greeter = await Greeter.deploy("Hello, Hardhat!");
-
-  await greeter.deployed();
-
-  console.log("Greeter deployed to:", greeter.address);
+  const [deployer] = await ethers.getSigners();
+  console.log(`Deployer account :${deployer.address}`);
+  const Token = await ethers.getContractFactory("Token");
+  const token = await Token.deploy(
+    "PillowToken",
+    "PILW",
+    "100000000000000000000000"
+  );
+  await token.deployed();
+  const Vesting = await ethers.getContractFactory("Vesting");
+  const vesting = await Vesting.deploy(
+    token.address,
+    "0xa5CB971Fb04f350a2dED9671e1178C076b0c3878",
+    "0x459D9A1Fd935238405a9875393390d4Bc6701381",
+    "1649658263",
+    true,
+    deployer.address
+  );
+  await vesting.deployed();
+  console.log(`Token Address: ${token.address}`);
+  console.log(`Vesting Address: ${vesting.address}`);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
