@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
-import "./SafeERC20.sol";
-import "./IERC20.sol";
-import "./SafeMath.sol";
-import "./Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title TokensVesting
  * @dev A token holder contract that can release its token balance gradually like a
  * typical vesting scheme.
  */
-contract TokensVesting is Ownable {
+contract Vesting is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -44,7 +44,6 @@ contract TokensVesting is Ownable {
         address advisor,
         address mentor,
         uint256 start,
-        uint256 totalsupply,
         bool revocable,
         address revoker
     ) {
@@ -70,9 +69,9 @@ contract TokensVesting is Ownable {
         _mentor = mentor;
 
         _revocable = revocable;
-        _duration = 100; //seconds in a day
-        _cliff = 100; //2 months cliff
-        _releasesCount = 2; //days in 22 months
+        _duration = 86400; //seconds in a day
+        _cliff = 5184000; //2 months cliff
+        _releasesCount = 669; //days in 22 months
         _start = start;
         _finish = _start.add(_releasesCount.mul(_duration)) + _cliff;
 
@@ -215,6 +214,8 @@ contract TokensVesting is Ownable {
     function _vestedAmount() private view returns (uint256) {
         uint256 currentBalance = _token.balanceOf(address(this));
         uint256 totalBalance = currentBalance.add(_released);
+        require(block.timestamp > (_start + _cliff), "release: No tokens are due!");
+        
 
         if (block.timestamp < _start) {
             return 0;
