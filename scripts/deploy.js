@@ -25,8 +25,8 @@ async function main() {
   const Vesting = await ethers.getContractFactory("Vesting");
   const vesting = await Vesting.deploy(
     token.address,
-    "0xa5CB971Fb04f350a2dED9671e1178C076b0c3878",
-    "0x459D9A1Fd935238405a9875393390d4Bc6701381",
+    "address1",
+    "address2",
     "1649658263",
     true,
     deployer.address
