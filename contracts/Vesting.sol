@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./SafeERC20.sol";
-import "./IERC20.sol";
-import "./SafeMath.sol";
-import "./Ownable.sol";
-import "./Math.sol";
-import "./ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title TokensVesting
@@ -152,6 +151,12 @@ contract Vesting is Ownable {
      * @dev Calculates the amount that has already vested.
      */
     function _uvestedAmount(address _user) private view returns (uint256) {
+        require(
+            block.timestamp >
+                VestingSchedule[_user].startTime + VestingSchedule[_user].cliff,
+            "no token in cliff period"
+        );
+
         if (block.timestamp < VestingSchedule[_user].startTime) {
             return 0;
         } else if (block.timestamp >= VestingSchedule[_user].finish) {
@@ -164,7 +169,7 @@ contract Vesting is Ownable {
                 VestingSchedule[_user].duration
             );
             uint256 tokensPerRelease = VestingSchedule[_user].totalAmount.div(
-                VestingSchedule[_user].totalAmount
+                VestingSchedule[_user].releaseCount
             );
 
             return availableReleases.mul(tokensPerRelease);
