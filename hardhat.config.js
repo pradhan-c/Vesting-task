@@ -22,11 +22,11 @@ const Private_Key = "";
  */
 module.exports = {
   solidity: "0.8.4",
-  networks:{
+  /*networks:{
     rinkeby: {
       url : ``,
       accounts : [`0x${Private_Key}`]
 
     }
-  }
+  }*/
 };
