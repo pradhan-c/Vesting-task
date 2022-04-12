@@ -16,67 +16,69 @@ describe("Vesting", function () {
       const token = await Token.deploy("PillowToken","PILW","1000000000000000000000000");
       await token.deployed();
       const Vesting = await ethers.getContractFactory("Vesting");
-      const vesting = await Vesting.deploy(token.address,addr1.address,addr2.address, (parseInt(await time.latest()) + 100).toString(), true ,owner.address);
+      const vesting = await Vesting.deploy(token.address,"1000000000000000000000000");
       await vesting.deployed();
       const ownerBalance = await token.balanceOf(owner.address);
       expect(await token.totalSupply()).to.equal(ownerBalance);
-    });
 
-    it("Transfer Token to Vesting Contract", async function () {
+    });
+    it("Total supply should equal owner balance", async function () {
       const [owner,addr1,addr2] = await ethers.getSigners();
       const Token = await ethers.getContractFactory("Token");
       const token = await Token.deploy("PillowToken","PILW","1000000000000000000000000");
       await token.deployed();
       const Vesting = await ethers.getContractFactory("Vesting");
-      const vesting = await Vesting.deploy(token.address,addr1.address,addr2.address, (parseInt(await time.latest()) + 100).toString(), true ,owner.address);
+      const vesting = await Vesting.deploy(token.address,"1000000000000000000000000");
+      await vesting.deployed();
+      const ownerBalance = await token.balanceOf(owner.address);
+      expect(await token.totalSupply()).to.equal(ownerBalance);
+    });
+    it("Transfer token to vesting address", async function () {
+      const [owner,addr1,addr2] = await ethers.getSigners();
+      const Token = await ethers.getContractFactory("Token");
+      const token = await Token.deploy("PillowToken","PILW","1000000000000000000000000");
+      await token.deployed();
+      const Vesting = await ethers.getContractFactory("Vesting");
+      const vesting = await Vesting.deploy(token.address,"1000000000000000000000000");
       await vesting.deployed();
       const ownerBalance = await token.balanceOf(owner.address);
       expect(await token.totalSupply()).to.equal(ownerBalance);
       await token.transfer(vesting.address, "12000000000000000000000");
     });
 
-
-    it("Cliff period release should revert", async function () {
+    
+    it("Add Vesting schedule for advisor", async function () {
       const [owner,addr1,addr2] = await ethers.getSigners();
       const Token = await ethers.getContractFactory("Token");
       const token = await Token.deploy("PillowToken","PILW","1000000000000000000000000");
       await token.deployed();
       const Vesting = await ethers.getContractFactory("Vesting");
-      const vesting = await Vesting.deploy(token.address,addr1.address,addr2.address, (parseInt(await time.latest()) + 100).toString(), true ,owner.address);
+      const vesting = await Vesting.deploy(token.address,"1000000000000000000000000");
       await vesting.deployed();
       const ownerBalance = await token.balanceOf(owner.address);
-    expect(await token.totalSupply()).to.equal(ownerBalance);
+      expect(await token.totalSupply()).to.equal(ownerBalance);
       await token.transfer(vesting.address, "12000000000000000000000");
+      await vesting.createVestingSchedule(addr1.address,0,1649773074,5184000,669000,86400,669,false);
       await time.increase(parseInt(time.duration.weeks('4')));
-      await expectRevert(vesting.connect(owner).release(), "release: No tokens are due!");
-
+      await expectRevert(vesting.connect(owner).release(addr1.address), "no token in cliff period");
     });
-    it("the first day realease amount should be eaqual to", async function () {
+
+    it("Add Vesting schedule for advisor", async function () {
       const [owner,addr1,addr2] = await ethers.getSigners();
       const Token = await ethers.getContractFactory("Token");
       const token = await Token.deploy("PillowToken","PILW","1000000000000000000000000");
       await token.deployed();
       const Vesting = await ethers.getContractFactory("Vesting");
-      const vesting = await Vesting.deploy(token.address,addr1.address,addr2.address, (parseInt(await time.latest()) + 100).toString(), true ,owner.address);
+      const vesting = await Vesting.deploy(token.address,"1000000000000000000000000");
       await vesting.deployed();
+      const ownerBalance = await token.balanceOf(owner.address);
+      expect(await token.totalSupply()).to.equal(ownerBalance);
       await token.transfer(vesting.address, "12000000000000000000000");
-      await time.increase(parseInt(time.duration.days('62')));
-      await vesting.connect(owner).release();
-     
-      expect(await token.balanceOf(addr2.address)).to.equal("10463378176382660687");
-      expect(await token.balanceOf(addr1.address)).to.equal("7473841554559043347");
-     
-
+      await vesting.createVestingSchedule(addr1.address,0,(parseInt(await time.latest()) + 100).toString(),5184000,669000,86400,669,false);
       
-
-    });
-    
-
-
-    
-
-
-
-
-    
+      await time.increase(parseInt(time.duration.days('62')));
+      await vesting.connect(owner).release(addr1.address);
+      expect(await token.balanceOf(addr1.address)).to.equal("1000");
+   
+    }); 
 });
