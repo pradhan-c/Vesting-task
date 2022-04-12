@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "./SafeERC20.sol";
+import "./IERC20.sol";
+import "./SafeMath.sol";
+import "./Ownable.sol";
+import "./Math.sol";
+import "./ReentrancyGuard.sol";
 
 /**
  * @title TokensVesting
@@ -15,218 +17,155 @@ contract Vesting is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    event TokensReleased(uint256 amount);
-    event TokensVestingRevoked(address receiver, uint256 amount);
-
-    // beneficiary of tokens after they are released
-    address private _mentor;
-    address private _advisor;
-
-    // Durations and timestamps are expressed in UNIX time, the same units as block.timestamp.
-    uint256 private _start;
-    uint256 private _finish;
-    uint256 private _duration;
-    uint256 private _releasesCount;
-    uint256 public _releasedForMentor;
-    uint256 public _releasedForAdvisor;
-    uint256 private _cliff;
-
-    uint256 public _released;
-
-    address private _revoker;
-    bool private _revocable;
-    bool private _revoked;
-
+    // address of the ERC20 token
     IERC20 private _token;
+    //the Three roles advisor,partnership and mentor
+    enum Roles {
+        advisor,
+        partnership,
+        mentor
+    }
+    //Vesting
+    struct VestingDetails {
+        Roles role;
+        uint256 startTime;
+        uint256 cliff;
+        uint256 totalAmount;
+        uint256 vestedAmount;
+        uint256 duration;
+        uint256 finish;
+        uint256 releaseCount;
+        bool revoked;
+    }
 
-    constructor(
-        address token,
-        address advisor,
-        address mentor,
-        uint256 start,
-        bool revocable,
-        address revoker
-    ) {
+    mapping(address => VestingDetails) public VestingSchedule;
+
+    event TokensVestingRevoked(address receiver, uint256 amount);
+    event TokensReleased(uint256 amount);
+
+    uint256 public advisorsTge = 5;
+    uint256 public mentorsTge = 7;
+
+    uint256 public advisor;
+    uint256 public mentor;
+
+    uint256 public scheduledAdvisor = 0;
+    uint256 public scheduledMentor = 0;
+
+    constructor(address token_, uint256 totalSupply) {
+        require(token_ != address(0x0));
+        _token = IERC20(token_);
+        CalculateTGE(totalSupply);
+    }
+
+    /**
+     * @dev Returns the address of the ERC20 token managed by the vesting contract.
+     */
+    function getToken() external view returns (address) {
+        return address(_token);
+    }
+
+    function createVestingSchedule(
+        address beneficiary,
+        Roles role,
+        uint256 startTime,
+        uint256 cliff,
+        uint256 totalAmount,
+        uint256 duration,
+        uint256 releaseCount,
+        bool revoked
+    ) public onlyOwner {
         require(
-            advisor != address(0),
-            "TokensVesting: advisor is the zero address!"
+            VestingSchedule[beneficiary].startTime == 0,
+            "Beneficiary already have a vesting Schedule"
         );
-        require(
-            mentor != address(0),
-            "TokensVesting: mentor is the zero address!"
+        if (role == Roles.advisor) {
+            require(
+                scheduledAdvisor + totalAmount < advisor,
+                "not enough advisors token"
+            );
+            scheduledAdvisor += totalAmount;
+        } else if (role == Roles.mentor) {
+            require(
+                scheduledMentor + totalAmount < mentor,
+                "not enough mentors token"
+            );
+            scheduledMentor += totalAmount;
+        }
+
+        uint256 finish = startTime.add(releaseCount.mul(duration)).add(cliff);
+
+        VestingSchedule[beneficiary] = VestingDetails(
+            role,
+            startTime,
+            cliff,
+            totalAmount,
+            0,
+            duration,
+            finish,
+            releaseCount,
+            revoked
         );
-        require(
-            token != address(0),
-            "TokensVesting: token is the zero address!"
-        );
-        require(
-            revoker != address(0),
-            "TokensVesting: revoker is the zero address!"
-        );
-
-        _token = IERC20(token);
-        _advisor = advisor;
-        _mentor = mentor;
-
-        _revocable = revocable;
-        _duration = 86400; //seconds in a day
-        _cliff = 5184000; //2 months cliff
-        _releasesCount = 669; //days in 22 months
-        _start = start;
-        _finish = _start.add(_releasesCount.mul(_duration)) + _cliff;
-
-        _revoker = revoker;
     }
-
-    // -----------------------------------------------------------------------
-    // GETTERS
-    // -----------------------------------------------------------------------
-
-    /**
-     * @return the beneficiary of the tokens.
-     */
-    function Advisor() public view returns (address) {
-        return _advisor;
-    }
-
-    /**
-     * @return the beneficiary of the tokens.
-     */
-    function Mentor() public view returns (address) {
-        return _mentor;
-    }
-
-    /**
-     * @return the start time of the token vesting.
-     */
-    function Start() public view returns (uint256) {
-        return _start;
-    }
-
-    /**
-     * @return the finish time of the token vesting.
-     */
-    function finish() public view returns (uint256) {
-        return _finish;
-    }
-
-    /**
-     * @return the duration of the token vesting.
-     */
-    function Duration() public view returns (uint256) {
-        return _duration;
-    }
-
-    /**
-     * @return the duration of the token vesting.
-     */
-    function Cliff() public view returns (uint256) {
-        return _cliff;
-    }
-
-    /**
-     * @return true if the vesting is revocable.
-     */
-    function Revocable() public view returns (bool) {
-        return _revocable;
-    }
-
-    /**
-     * @return the amount of the token released.
-     */
-    function Released() public view returns (uint256) {
-        return _releasedForMentor + _releasedForAdvisor;
-    }
-
-    /**
-     * @return true if the token is revoked.
-     */
-    function revoked() public view returns (bool) {
-        return _revoked;
-    }
-
-    /**
-     * @return address, who allowed to revoke.
-     */
-    function Revoker() public view returns (address) {
-        return _revoker;
-    }
-
-    // -----------------------------------------------------------------------
-    // SETTERS
-    // -----------------------------------------------------------------------
 
     /**
      * @notice Transfers vested tokens to beneficiary.
      */
-    function release() public onlyOwner {
-        uint256 unreleased = _releasableAmount();
-        uint256 unreleasedForAdvisor = (unreleased.mul(5)).div(12);
-        uint256 unreleasedForMentor = (unreleased.mul(7)).div(12);
-        require(unreleasedForAdvisor > 0, "release: No tokens are due!");
-        require(unreleasedForMentor > 0, "release: No tokens are due!");
-        _released = _released.add(unreleased);
+    function release(address _raddress) public onlyOwner {
+        uint256 unreleased = _releasableAmount(_raddress);
+        uint256 alreadyreleased = VestingSchedule[_raddress].vestedAmount;
 
-        _releasedForAdvisor = _releasedForAdvisor.add(unreleasedForAdvisor);
-        _releasedForMentor = _releasedForMentor.add(unreleasedForMentor);
+        require(unreleased > 0, "release: No tokens are due!");
 
-        _token.safeTransfer(_advisor, unreleasedForAdvisor);
-        _token.safeTransfer(_mentor, unreleasedForMentor);
+        VestingSchedule[_raddress].vestedAmount = alreadyreleased.add(
+            unreleased
+        );
 
-        emit TokensReleased(unreleasedForAdvisor);
-        emit TokensReleased(unreleasedForMentor);
+        _token.safeTransfer(_raddress, unreleased);
+        emit TokensReleased(unreleased);
     }
 
-    /**
-     * @notice Allows the owner to revoke the vesting. Tokens already vested
-     * remain in the contract, the rest are returned to the owner.
-     * @param receiver Address who should receive tokens
-     */
-    function revoke(address receiver) public {
-        require(msg.sender == _revoker, "revoke: unauthorized sender!");
-        require(_revocable, "revoke: cannot revoke!");
-        require(!_revoked, "revoke: token already revoked!");
+    function Revoke(address receiver, address revoke) public onlyOwner {
+        uint256 refund = (VestingSchedule[revoke].totalAmount).sub(
+            VestingSchedule[revoke].vestedAmount
+        );
 
-        uint256 balance = _token.balanceOf(address(this));
-        uint256 unreleased = _releasedForAdvisor.add(_releasedForMentor);
-        uint256 refund = balance.sub(unreleased);
-
-        _revoked = true;
+        VestingSchedule[revoke].revoked = true;
         _token.safeTransfer(receiver, refund);
 
         emit TokensVestingRevoked(receiver, refund);
     }
 
-    // -----------------------------------------------------------------------
-    // INTERNAL
-    // -----------------------------------------------------------------------
+    function CalculateTGE(uint256 _tsupply) private {
+        advisor = _tsupply.mul(advisorsTge).div(100);
+        mentor = _tsupply.mul(mentorsTge).div(100);
+    }
 
     /**
      * @dev Calculates the amount that has already vested but hasn't been released yet.
      */
-    function _releasableAmount() private view returns (uint256) {
-        return _vestedAmount().sub(_released);
+    function _releasableAmount(address user) private view returns (uint256) {
+        return _uvestedAmount(user).sub(VestingSchedule[user].vestedAmount);
     }
 
     /**
      * @dev Calculates the amount that has already vested.
      */
-    function _vestedAmount() private view returns (uint256) {
-        uint256 currentBalance = _token.balanceOf(address(this));
-        uint256 totalBalance = currentBalance.add(_released);
-        require(block.timestamp > (_start + _cliff), "release: No tokens are due!");
-        
-
-        if (block.timestamp < _start) {
+    function _uvestedAmount(address _user) private view returns (uint256) {
+        if (block.timestamp < VestingSchedule[_user].startTime) {
             return 0;
-        } else if (block.timestamp >= _finish || _revoked) {
-            return totalBalance;
+        } else if (block.timestamp >= VestingSchedule[_user].finish) {
+            return VestingSchedule[_user].totalAmount;
         } else {
-            uint256 timeLeftAfterStart = (block.timestamp.sub(_start)).sub(
-                _cliff
+            uint256 timeLeftAfterStart = (
+                block.timestamp.sub(VestingSchedule[_user].startTime)
+            ).sub(VestingSchedule[_user].cliff);
+            uint256 availableReleases = timeLeftAfterStart.div(
+                VestingSchedule[_user].duration
             );
-            uint256 availableReleases = timeLeftAfterStart.div(_duration);
-            uint256 tokensPerRelease = totalBalance.div(_releasesCount);
+            uint256 tokensPerRelease = VestingSchedule[_user].totalAmount.div(
+                VestingSchedule[_user].totalAmount
+            );
 
             return availableReleases.mul(tokensPerRelease);
         }
