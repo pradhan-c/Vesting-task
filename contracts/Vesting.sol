@@ -73,7 +73,7 @@ contract Vesting is Ownable {
         uint256 duration,
         uint256 releaseCount,
         bool revoked
-    ) public onlyOwner {
+    ) external onlyOwner {
         require(
             VestingSchedule[beneficiary].startTime == 0,
             "Beneficiary already have a vesting Schedule"
@@ -110,7 +110,7 @@ contract Vesting is Ownable {
     /**
      * @notice Transfers vested tokens to beneficiary.
      */
-    function release(address _raddress) public onlyOwner {
+    function release(address _raddress) external  {
         uint256 unreleased = _releasableAmount(_raddress);
         uint256 alreadyreleased = VestingSchedule[_raddress].vestedAmount;
 
@@ -124,7 +124,7 @@ contract Vesting is Ownable {
         emit TokensReleased(unreleased);
     }
 
-    function Revoke(address receiver, address revoke) public onlyOwner {
+    function Revoke(address receiver, address revoke) external onlyOwner {
         uint256 refund = (VestingSchedule[revoke].totalAmount).sub(
             VestingSchedule[revoke].vestedAmount
         );
